@@ -2,11 +2,13 @@ import streamlit as st
 import streamlit_authenticator as stauth
 from image_browser import main as image_browser
 
-st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
 
 def login():
+    st.set_page_config(page_title="Stool Image Browser", page_icon="🚽")
     global authenticator
-    st.title("Stool Image Browser")
+
+    placeholder_title = st.empty()
+    placeholder_title.title("🚽 Stool Image Browser")
 
     authenticator = stauth.Authenticate(
         st.secrets["credentials"].to_dict(),
@@ -16,23 +18,26 @@ def login():
         st.secrets['preauthorized']
     )
 
-    placeholder_text = st.empty()
-    placeholder_text.text("Only privileged users can access this database.")
-
     name, authentication_status, username = authenticator.login('Login', 'main')
     
     if authentication_status:
-        placeholder_text.empty()
+        placeholder_title.empty()
 
     return name, authentication_status, username
 
 if __name__ == "__main__":
+    if 'page_number' not in st.session_state:
+        st.session_state.page_number = 1
+        st.session_state.button_clicked = False
+
     name, authentication_status, username = login()
 
     if authentication_status:
-        st.toast(f'Login Success. Welcome {name}!')
         image_browser()
+        with st.sidebar:
+            st.header("Logout?")
+            authenticator.logout('Logout', 'main', key='unique_key')
     elif authentication_status == False:
         st.error('Username/password is incorrect')
     elif authentication_status == None:
-        st.warning('Please enter your username and password')
+        st.warning("Only authorized users can access this database.")

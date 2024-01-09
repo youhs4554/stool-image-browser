@@ -6,10 +6,16 @@ from PIL import Image
 from io import BytesIO
 import base64
 from datetime import datetime
+import pytz
 
 s3 = boto3.client('s3', region_name=st.secrets['AWS_DEFAULT_REGION'], 
                   aws_access_key_id=st.secrets['AWS_ACCESS_KEY_ID'], 
                   aws_secret_access_key=st.secrets['AWS_SECRET_ACCESS_KEY'])
+
+@st.cache_data
+def convert_df(df):
+    # IMPORTANT: Cache the conversion to prevent computation on every rerun
+    return df.to_csv().encode('utf-8')
 
 def get_s3_presigned_url(bucket, key, expiration=3600):
     try:
@@ -56,7 +62,7 @@ def get_s3_image_preview(bucket, key):
     image_data = obj['Body'].read()
 
     image = Image.open(BytesIO(image_data)).convert("RGB")
-    image.thumbnail((150, 150))
+    image.thumbnail((100, 100))
 
     buffered = BytesIO()
     image.save(buffered, format="JPEG")
@@ -73,110 +79,130 @@ def main():
     bucket = st.secrets["AWS_S3_BUCKET_NAME"]
 
     with st.sidebar:
-        st.title("AWS S3 prefix")
+        st.title("🚽 Stool Image Browser")
+        st.header("Storage")
         prefix = st.selectbox("Prefix", ["R0__ulcerative_colitis", "R1__bowel_preparation", "Calprotectin_Fecal_Test"])
-        st.title("Filter")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today') - pd.DateOffset(days=7))).date()
-        with col2:
-            end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
-
-    st.info(f"Prefix : {prefix}")
 
     with st.spinner('Loading Data...'):
         df = get_s3_metadata(bucket, prefix)
     if df is not None:
-        df['LastModified'] = df['LastModified'].dt.tz_localize(None)
-        df['LastModified'] = df['LastModified'].dt.date
+        seoul_tz = pytz.timezone('Asia/Seoul')
+        df['LastModified'] = df['LastModified'].dt.tz_convert(seoul_tz)
+        df['LastModified'] = df['LastModified'].dt.strftime('%Y-%m-%d %H:%M:%S %Z')
 
         with st.sidebar:
+            st.header("Filter")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today') - pd.DateOffset(days=7))).date()
+            with col2:
+                end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
+
+            st.header("Search")
             col1, col2 = st.columns(2)
             with col1:
-                search_column = st.selectbox("By", ["SiteName", "Gender"])
+                search_column = st.selectbox("Column", ["SiteName", "Gender", "DoB"])
             
             with col2:
-                unique_values = ["None"] + df[search_column].unique().tolist()
-                search_query = st.selectbox("Select value", unique_values)
+                unique_values = ["-"] + sorted(df[search_column].unique().astype(str).tolist())
+                search_query = st.selectbox("Value", unique_values)
 
-            st.title("Sorting")
+            st.header("Sorting")
             col1, col2 = st.columns(2)
             with col1:
-                sort_column = st.selectbox("Order by", ["DoB", "LastModified"])
+                sort_column = st.selectbox("Order by", ["LastModified", "DoB"])
             with col2:
-                sort_order = st.selectbox("Strategy", ["Ascending", "Descending"])
+                sort_order = st.selectbox("Strategy", ["Descending", "Ascending"])
 
+        start_date = seoul_tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0))
+        end_date = seoul_tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
 
-        df = df[(df['LastModified'] >= start_date) & (df['LastModified'] <= end_date)]
+        df_sel = df[(df['LastModified'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['LastModified'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
 
         # Apply search query
-        if search_query != "None":
-            df = df[df[search_column].astype(str).str.contains(search_query, na=False)]
+        if search_query != "-":
+            df_sel = df_sel[df_sel[search_column].astype(str).str.contains(search_query, na=False)]
 
         # Apply sorting
         if sort_column:
             if sort_order == "Ascending":
-                df = df.sort_values(by=sort_column, ascending=True)
+                df_sel = df_sel.sort_values(by=sort_column, ascending=True)
             else:
-                df = df.sort_values(by=sort_column, ascending=False)
-        
+                df_sel = df_sel.sort_values(by=sort_column, ascending=False)
+
         # Pagination
-        items_per_page = 10
-        n_pages = max(1, len(df) // items_per_page)
-        if len(df) % items_per_page > 0:
+        items_per_page = 5
+        n_pages = max(1, len(df_sel) // items_per_page)
+        if len(df_sel) % items_per_page > 0:
             n_pages += 1
 
-        if n_pages == 1 and len(df) == 0:
+        if n_pages == 1 and len(df_sel) == 0:
             st.error('No data to display.')
         else:
-            with st.sidebar:
-                st.title("Page Slider")
+            sup_col1, _, sup_col2 = st.columns([1.5, 2, 1.5])
+            with sup_col2:
+                st.subheader("💾 Download")
+                all_rows = st.checkbox('All Rows?', value=True)
 
-                page_number = st.slider(label="page_number", min_value=1, max_value=n_pages, value=1, step=1)
+                # Export to CSV
+                st.download_button(
+                    label="Save as .csv",
+                    data=convert_df(df if all_rows else df_sel),
+                    file_name='stool_data_exported.csv',
+                    mime='text/csv',
+                )
 
-                # Export to Excel
-                st.title("Download")
-                towrite = BytesIO()
-                df[["SiteName", "DoB", "Gender"]].to_excel(towrite, index=False, engine='openpyxl')  
-                towrite.seek(0)
-                b64 = base64.b64encode(towrite.read()).decode()
-                linko= f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="mytable.xlsx">Export all data as an excel file</a>'
-                st.markdown(linko, unsafe_allow_html=True)
+            with sup_col1:
+                st.subheader(f"Page ({st.session_state.page_number}/{n_pages})")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button('⬅️'):
+                        if st.session_state.page_number > 1:
+                            st.session_state.page_number -= 1
+                            st.session_state.button_clicked = True
+                with col2:
+                    if st.button('➡️'):
+                        if st.session_state.page_number < n_pages:
+                            st.session_state.page_number += 1
+                            st.session_state.button_clicked = True
 
-            start_index = items_per_page * (page_number - 1)
+            if st.session_state.button_clicked:
+                st.session_state.button_clicked = False  # Reset the button click state
+                st.rerun()  # Rerun the app
+
+            start_index = items_per_page * (st.session_state.page_number - 1)
             end_index = start_index + items_per_page
 
-            df = df.iloc[start_index:end_index]
+            df_sel = df_sel.iloc[start_index:end_index]
 
         st.markdown("""<style>
-                    .main > div {
-                        padding: 1rem;
-                        height: 80vh;
-                    }
-                    .table-container {
+                    .appview-container .main .block-container {
+                        padding-top: 0rem;
+                        width: 100%;
                         max-height: 80vh;
-                        overflow-y: auto;
+                    }
+                    .st-emotion-cache-16txtl3 {
+                        margin-top: -5rem;
                     }
                     #my_table {
                         width: 100%; 
-                        table-layout: auto;
+                        margin-top: -1rem;
                     }
                     #my_table th {
                         background-color: #f8f9fa; 
                         color: #333; 
-                        font-size: 1.5em; 
+                        font-size: 1.2em; 
                         text-align: center;
                         font-style: italic;
                     }
                     #my_table td {
-                        font-size: 1em; 
                         text-align: center;
                     }
                     </style>
                     """, unsafe_allow_html=True)
         
-        st.markdown(f'<div class="table-container">{df.to_html(escape=False, index=False, table_id="my_table")}</div>', unsafe_allow_html=True)
+        st.markdown(df_sel.to_html(escape=False, index=False, table_id="my_table"), unsafe_allow_html=True)
 
     else:
         st.error('No objects found.')
