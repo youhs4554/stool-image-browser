@@ -12,6 +12,15 @@ s3 = boto3.client('s3', region_name=st.secrets['AWS_DEFAULT_REGION'],
                   aws_access_key_id=st.secrets['AWS_ACCESS_KEY_ID'], 
                   aws_secret_access_key=st.secrets['AWS_SECRET_ACCESS_KEY'])
 
+def get_folder_list(bucket):
+    folder_list = []
+    paginator = s3.get_paginator('list_objects_v2')
+    for result in paginator.paginate(Bucket=bucket, Delimiter='/'):
+        for prefix in result.get('CommonPrefixes'):
+            folder_list.append(prefix.get('Prefix'))
+
+    return folder_list
+
 @st.cache_data
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
@@ -49,10 +58,15 @@ def get_s3_metadata(bucket, prefix):
         if is_image_file(name):
             preview = get_s3_image_preview(bucket, name)
             download_link = get_s3_download_link(bucket, name)
-            basename = os.path.basename(name)
-            _, site_name, dob, gender, *_  = basename.split('_')
+            basename = os.path.splitext(os.path.basename(name))[0]
+            _, site_name, dob, gender, _, _, *lang  = basename.split('_')
 
-            data.append({'SiteName': site_name, 'Gender': gender, 'DoB' : datetime.strptime(dob, '%Y%m%d'), 'LastModified': last_modified, 'Preview': preview, 'Download': download_link})
+            if lang:
+                lang = lang[0]
+            else:
+                lang = "N/A"
+
+            data.append({'SiteName': site_name, 'Gender': gender, 'DoB' : datetime.strptime(dob, '%Y%m%d'), 'LastModified': last_modified, 'Language': lang, 'Preview': preview, 'Download': download_link})
 
     return pd.DataFrame(data)
 
@@ -72,7 +86,22 @@ def get_s3_image_preview(bucket, key):
 
 def get_s3_download_link(bucket, key):
     download_link = get_s3_presigned_url(bucket, key)
-    return f'<a href="{download_link}" download>⬇</a>'
+    name = os.path.basename(download_link.split('?')[0])
+    name, ext = os.path.splitext(name)
+    img_prefix, site_name, dob, gender, date_info, time_info, *lang = name.split('_')
+    outfile_elements = [img_prefix]
+
+    if site_name != "":
+        outfile_elements.append(site_name)
+
+    outfile_elements.extend([dob, gender, date_info, time_info])
+
+    if lang:
+        outfile_elements.extend(lang)
+
+    outfile = "_".join(outfile_elements) + ext
+
+    return f'<a href="{download_link}" download="{outfile}">⬇</a>'
 
 
 def main():
@@ -81,101 +110,124 @@ def main():
     with st.sidebar:
         st.title("🚽 Stool Image Browser")
         st.header("Storage")
-        prefix = st.selectbox("Prefix", ["R0__ulcerative_colitis", "R1__bowel_preparation", "Calprotectin_Fecal_Test"])
+        prefix = st.selectbox("Prefix", get_folder_list(bucket))
+
+        # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
+        us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']
+        timezones = ['Asia/Seoul', *us_timezones]
+        st.header("Time Zone")
+        # Streamlit의 selectbox를 사용하여 사용자에게 시간대를 선택하도록 요청합니다.
+        selected_timezone = st.selectbox('Please select your timezone', timezones)
 
     with st.spinner('Loading Data...'):
         df = get_s3_metadata(bucket, prefix)
     if df is not None:
-        seoul_tz = pytz.timezone('Asia/Seoul')
-        df['LastModified'] = df['LastModified'].dt.tz_convert(seoul_tz)
+        # 선택한 시간대를 적용합니다.
+        tz = pytz.timezone(selected_timezone)
+
+        # 기존 코드를 선택한 시간대에 맞게 수정합니다.
+        earliest_date = pd.to_datetime(df['LastModified']).min()
+        earliest_date = tz.localize(datetime(earliest_date.year, earliest_date.month, earliest_date.day, 0, 0, 0))
+        df['LastModified'] = df['LastModified'].dt.tz_convert(tz)
         df['LastModified'] = df['LastModified'].dt.strftime('%Y-%m-%d %H:%M:%S %Z')
 
         with st.sidebar:
-            st.header("Filter")
-            col1, col2 = st.columns(2)
-
-            with col1:
-                start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today') - pd.DateOffset(days=7))).date()
-            with col2:
-                end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
-
-            st.header("Search")
-            col1, col2 = st.columns(2)
-            with col1:
-                search_column = st.selectbox("Column", ["SiteName", "Gender", "DoB"])
-            
-            with col2:
-                unique_values = ["-"] + sorted(df[search_column].unique().astype(str).tolist())
-                search_query = st.selectbox("Value", unique_values)
-
             st.header("Sorting")
             col1, col2 = st.columns(2)
             with col1:
                 sort_column = st.selectbox("Order by", ["LastModified", "DoB"])
             with col2:
                 sort_order = st.selectbox("Strategy", ["Descending", "Ascending"])
+            
+            # Apply sorting
+            if sort_column:
+                if sort_order == "Ascending":
+                    df = df.sort_values(by=sort_column, ascending=True)
+                else:
+                    df = df.sort_values(by=sort_column, ascending=False)
 
-        start_date = seoul_tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0))
-        end_date = seoul_tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
+        with st.sidebar:
+            st.header("Filter")
+            col1, col2 = st.columns(2)
+            with col1:
+                start_date = pd.to_datetime(st.date_input('Start date', value=earliest_date)).date()
+            with col2:
+                end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
 
-        df_sel = df[(df['LastModified'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['LastModified'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
+            start_date = tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0))
+            end_date = tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
 
-        # Apply search query
-        if search_query != "-":
-            df_sel = df_sel[df_sel[search_column].astype(str).str.contains(search_query, na=False)]
+            df_sel = df[(df['LastModified'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['LastModified'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
 
-        # Apply sorting
-        if sort_column:
-            if sort_order == "Ascending":
-                df_sel = df_sel.sort_values(by=sort_column, ascending=True)
-            else:
-                df_sel = df_sel.sort_values(by=sort_column, ascending=False)
+            df_filter = df_sel
+
+            def reset_page_number():
+                st.session_state.page_number = 1
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                site_name_options = ["-"] + sorted(df_filter["SiteName"].unique().astype(str).tolist())
+                site_name = st.selectbox("SiteName", site_name_options, on_change=reset_page_number)
+                if site_name != "-":
+                    df_filter = df_filter[df_filter["SiteName"].astype(str).str.contains(site_name, na=False)]
+            with col2:
+                gender_options = ["-"] + sorted(df_filter["Gender"].unique().astype(str).tolist())
+                gender = st.selectbox("Gender", gender_options, on_change=reset_page_number)
+                if gender != "-":
+                    df_filter = df_filter[df_filter["Gender"].astype(str).str.contains(gender, na=False)]
+            with col3:
+                dob_options =  ["-"] + sorted(df_filter["DoB"].unique().astype(str).tolist())
+                dob = st.selectbox("DoB", dob_options, on_change=reset_page_number)
+                if dob != "-":
+                    df_filter = df_filter[df_filter["DoB"].astype(str).str.contains(dob, na=False)]
+            
+            st.header("Rows per page")
+            items_per_page = st.slider('Rows', 5, 50, value=5, step=5)
+
+        # re-index
+        df_filter.index = pd.Series(range(len(df_filter)))
+        df_filter.reset_index(inplace=True)
 
         # Pagination
-        items_per_page = 5
-        n_pages = max(1, len(df_sel) // items_per_page)
-        if len(df_sel) % items_per_page > 0:
+        n_pages = max(0, len(df_filter) // items_per_page)
+        if len(df_filter) % items_per_page > 0:
             n_pages += 1
 
-        if n_pages == 1 and len(df_sel) == 0:
+        if n_pages == 1 and len(df_filter) == 0:
             st.error('No data to display.')
         else:
-            sup_col1, _, sup_col2 = st.columns([1.5, 2, 1.5])
-            with sup_col2:
-                st.subheader("💾 Download")
-                all_rows = st.checkbox('All Rows?', value=True)
-
+            st.info(f"📊 Number of samples : {len(df_filter)}")
+            with st.sidebar:
+                df_to_download = df_filter[["SiteName", "Gender", "DoB", "LastModified", "Language"]]
+                
+                st.header("Download Table")
                 # Export to CSV
                 st.download_button(
-                    label="Save as .csv",
-                    data=convert_df(df if all_rows else df_sel),
-                    file_name='stool_data_exported.csv',
+                    label="⬇️",
+                    data=convert_df(df_to_download),
+                    file_name=f'stool_data_exported.csv',
                     mime='text/csv',
                 )
 
-            with sup_col1:
+            supcol1, _, supcol2 = st.columns([1, 8, 1])
+
+            with supcol1:
                 st.subheader(f"Page ({st.session_state.page_number}/{n_pages})")
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button('⬅️'):
-                        if st.session_state.page_number > 1:
-                            st.session_state.page_number -= 1
-                            st.session_state.button_clicked = True
+                    if st.button('⬅️') and st.session_state.page_number > 1:
+                        st.session_state.page_number -= 1
+                        st.session_state.button_clicked = True
                 with col2:
-                    if st.button('➡️'):
-                        if st.session_state.page_number < n_pages:
-                            st.session_state.page_number += 1
-                            st.session_state.button_clicked = True
-
-            if st.session_state.button_clicked:
-                st.session_state.button_clicked = False  # Reset the button click state
-                st.rerun()  # Rerun the app
-
+                    if st.button('➡️') and st.session_state.page_number < n_pages:
+                        st.session_state.page_number += 1
+                        st.session_state.button_clicked = True
+            
             start_index = items_per_page * (st.session_state.page_number - 1)
             end_index = start_index + items_per_page
 
-            df_sel = df_sel.iloc[start_index:end_index]
-
+            df_filter = df_filter.iloc[start_index:end_index]
+        
         st.markdown("""<style>
                     .appview-container .main .block-container {
                         padding-top: 0rem;
@@ -185,9 +237,12 @@ def main():
                     .st-emotion-cache-16txtl3 {
                         margin-top: -5rem;
                     }
+                    .table-container {
+                        max-height: 80vh;
+                        overflow-y: auto;
+                    }
                     #my_table {
                         width: 100%; 
-                        margin-top: -1rem;
                     }
                     #my_table th {
                         background-color: #f8f9fa; 
@@ -202,11 +257,14 @@ def main():
                     </style>
                     """, unsafe_allow_html=True)
         
-        st.markdown(df_sel.to_html(escape=False, index=False, table_id="my_table"), unsafe_allow_html=True)
+        st.markdown(f'<div class="table-container">{df_filter.to_html(escape=False, index=False, table_id="my_table")}</div>', unsafe_allow_html=True)
 
     else:
         st.error('No objects found.')
 
+    if st.session_state.button_clicked:
+        st.session_state.button_clicked = False  # Reset the button click state
+        st.rerun()  # Rerun the app
 
 if __name__ == '__main__':
     main()

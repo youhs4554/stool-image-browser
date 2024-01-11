@@ -4,7 +4,7 @@ from image_browser import main as image_browser
 
 
 def login():
-    st.set_page_config(page_title="Stool Image Browser", page_icon="🚽")
+    st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
     global authenticator
 
     placeholder_title = st.empty()
@@ -28,7 +28,10 @@ def login():
 if __name__ == "__main__":
     if 'page_number' not in st.session_state:
         st.session_state.page_number = 1
+    if 'button_clicked' not in st.session_state:
         st.session_state.button_clicked = False
+    if 'apply_filter' not in st.session_state:
+        st.session_state.apply_filter = False
 
     name, authentication_status, username = login()
 
