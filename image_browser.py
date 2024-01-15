@@ -1,4 +1,5 @@
 import os
+import re
 import boto3
 import pandas as pd
 import streamlit as st
@@ -7,10 +8,35 @@ from io import BytesIO
 import base64
 from datetime import datetime
 import pytz
+import requests
+import zipfile
 
 s3 = boto3.client('s3', region_name=st.secrets['AWS_DEFAULT_REGION'], 
                   aws_access_key_id=st.secrets['AWS_ACCESS_KEY_ID'], 
                   aws_secret_access_key=st.secrets['AWS_SECRET_ACCESS_KEY'])
+@st.cache_data
+def get_image_ext(url):
+    name = os.path.basename(url).split("?")[0]
+    _, ext = os.path.splitext(name)
+    return ext
+
+# download_link에서 데이터를 다운로드 받아 byte string으로 변환
+@st.cache_data
+def download_data(url):
+    response = requests.get(url)
+    return response.content
+
+# zip 파일로 압축
+@st.cache_data
+def zip_files(download_links, csv_data):
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+        for i, link in enumerate(download_links, start=1):
+            data = download_data(link)
+            ext = get_image_ext(link)
+            zip_file.writestr(os.path.join('images', f'image_{i:04d}' + ext) , data)
+        zip_file.writestr('meta_table.csv', csv_data)
+    return zip_buffer.getvalue()
 
 def get_folder_list(bucket):
     folder_list = []
@@ -24,8 +50,9 @@ def get_folder_list(bucket):
 @st.cache_data
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
-    return df.to_csv().encode('utf-8')
+    return df.to_csv(index=False)
 
+@st.cache_data
 def get_s3_presigned_url(bucket, key, expiration=3600):
     try:
         response = s3.generate_presigned_url('get_object',
@@ -204,16 +231,20 @@ def main(username):
         else:
             st.info(f"📊 Number of samples : {len(df_filter)}")
             with st.sidebar:
-                df_to_download = df_filter[["SiteName", "Gender", "DoB", "LastModified", "Language"]]
-                
-                st.header("Download Table")
-                # Export to CSV
-                st.download_button(
-                    label="⬇️",
-                    data=convert_df(df_to_download),
-                    file_name=f'stool_data_exported.csv',
-                    mime='text/csv',
-                )
+                st.header("Download Data")
+
+                # download_link를 추출
+                download_links = df_filter['Download'].apply(lambda x: re.search('href="(.+?)"', x).group(1) if re.search('href="(.+?)"', x) else None)
+
+                df_to_download = df_filter[["SiteName", "Gender", "DoB", "LastModified", "Language"]].copy()
+                df_to_download["FileName"] = [ f'image_{i:04d}' + get_image_ext(link) for i, link in enumerate(download_links.tolist(), start=1)]
+                csv_data = convert_df(df_to_download)
+
+                # zip 파일 생성
+                zip_data = zip_files(download_links, csv_data)
+
+                # download_button을 사용하여 zip 파일 다운로드
+                st.download_button(label='⬇️', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
 
             supcol1, _, supcol2 = st.columns([1, 8, 1])
 
