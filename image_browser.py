@@ -28,24 +28,20 @@ def download_data(url):
     return response.content
 
 # zip 파일로 압축
-@st.cache_data
 def zip_files(download_links, csv_data):
     zip_buffer = BytesIO()
+    total_files = len(download_links)
 
-    def download_and_write(item):
-        i, link = item
-        data = download_data(link)
-        ext = get_image_ext(link)
-        with zipfile.ZipFile(zip_buffer, 'a') as zip_file:  # 'a' mode to append
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:  # 'a' mode to append
+        for i, link in enumerate(download_links, start=1):
+            data = download_data(link)
+            ext = get_image_ext(link)
             zip_file.writestr(os.path.join('images', f'image_{i:04d}' + ext), data)
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        list(executor.map(download_and_write, enumerate(download_links, start=1)))
-
-    with zipfile.ZipFile(zip_buffer, 'a') as zip_file:
+            # 진행 상태 반환
+            yield i / total_files
         zip_file.writestr('meta_table.csv', csv_data)
 
-    return zip_buffer.getvalue()
+    yield zip_buffer.getvalue()
 
 def get_folder_list(bucket):
     folder_list = []
@@ -240,7 +236,7 @@ def main(username):
         else:
             st.info(f"📊 Number of samples : {len(df_filter)}")
             with st.sidebar:
-                st.header("Download Data")
+                st.header("Download")
 
                 # download_link를 추출
                 download_links = df_filter['Download'].apply(lambda x: re.search('href="(.+?)"', x).group(1) if re.search('href="(.+?)"', x) else None)
@@ -249,11 +245,22 @@ def main(username):
                 df_to_download["FileName"] = [ f'image_{i:04d}' + get_image_ext(link) for i, link in enumerate(download_links.tolist(), start=1)]
                 csv_data = convert_df(df_to_download)
 
-                # zip 파일 생성
-                zip_data = zip_files(download_links, csv_data)
+                extract_button = st.empty()
+                if extract_button.button("↗️ \r Extract"):
+                    progress_bar = st.progress(0, text='Extracting data...')
+                    zip_generator = zip_files(download_links, csv_data)
+                    for output in zip_generator:
+                        if isinstance(output, float):
+                            # 진행 상태 업데이트
+                            progress_bar.progress(output, text='Extracting data...')
+                        else:
+                            # 최종 데이터 반환
+                            zip_data = output
+                            progress_bar.empty()
+                            extract_button.empty()
+                            st.success("🎉 Now, you can download data!")
+                            st.download_button(label='⬇️ \r Download', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
 
-                # download_button을 사용하여 zip 파일 다운로드
-                st.download_button(label='⬇️', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
 
             supcol1, _, supcol2 = st.columns([1, 8, 1])
 
