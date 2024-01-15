@@ -10,6 +10,7 @@ from datetime import datetime
 import pytz
 import requests
 import zipfile
+import concurrent.futures
 
 s3 = boto3.client('s3', region_name=st.secrets['AWS_DEFAULT_REGION'], 
                   aws_access_key_id=st.secrets['AWS_ACCESS_KEY_ID'], 
@@ -30,12 +31,20 @@ def download_data(url):
 @st.cache_data
 def zip_files(download_links, csv_data):
     zip_buffer = BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-        for i, link in enumerate(download_links, start=1):
-            data = download_data(link)
-            ext = get_image_ext(link)
-            zip_file.writestr(os.path.join('images', f'image_{i:04d}' + ext) , data)
+
+    def download_and_write(item):
+        i, link = item
+        data = download_data(link)
+        ext = get_image_ext(link)
+        with zipfile.ZipFile(zip_buffer, 'a') as zip_file:  # 'a' mode to append
+            zip_file.writestr(os.path.join('images', f'image_{i:04d}' + ext), data)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        list(executor.map(download_and_write, enumerate(download_links, start=1)))
+
+    with zipfile.ZipFile(zip_buffer, 'a') as zip_file:
         zip_file.writestr('meta_table.csv', csv_data)
+
     return zip_buffer.getvalue()
 
 def get_folder_list(bucket):
@@ -218,7 +227,7 @@ def main(username):
             items_per_page = st.slider('Rows', 5, 50, value=5, step=5)
 
         # re-index
-        df_filter.index = pd.Series(range(len(df_filter)))
+        df_filter.index = pd.Series(range(1, len(df_filter)+1))
         df_filter.reset_index(inplace=True)
 
         # Pagination
