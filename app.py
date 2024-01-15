@@ -36,7 +36,7 @@ if __name__ == "__main__":
     name, authentication_status, username = login()
 
     if authentication_status:
-        image_browser()
+        image_browser(username=username)
         with st.sidebar:
             st.header("Logout?")
             authenticator.logout('Logout', 'main', key='unique_key')

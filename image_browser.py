@@ -104,13 +104,19 @@ def get_s3_download_link(bucket, key):
     return f'<a href="{download_link}" download="{outfile}">⬇</a>'
 
 
-def main():
+def main(username):
     bucket = st.secrets["AWS_S3_BUCKET_NAME"]
 
     with st.sidebar:
         st.title("🚽 Stool Image Browser")
         st.header("Storage")
-        prefix = st.selectbox("Prefix", get_folder_list(bucket))
+
+        if 'guest' in username:
+            folder_list = ['Calprotectin_Fecal_Test']
+        else:
+            folder_list = get_folder_list(bucket)
+
+        prefix = st.selectbox("Prefix", folder_list)
 
         # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
         us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']
