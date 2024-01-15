@@ -254,29 +254,25 @@ def main(username):
                 df_to_download["FileName"] = [ f'image_{i:04d}' + get_image_ext(link) for i, link in enumerate(download_links.tolist(), start=1)]
                 csv_data = convert_df(df_to_download)
 
-                eta_text = st.empty()
                 extract_button = st.empty()
                 if extract_button.button("↗️ \r Extract"):
                     start_time = time.time()
-                    total_files = len(download_links)
                     progress_bar = st.progress(0, text='Extracting data...')
                     zip_generator = zip_files_parallel(download_links, csv_data)
                     for output in zip_generator:
                         if isinstance(output, float):
                             # 진행 상태 업데이트
                             progress = output
-                            progress_bar.progress(output, text='Extracting data...')
 
                             # ETA 계산 및 표시
                             elapsed_time = time.time() - start_time
                             eta = elapsed_time / progress * (1 - progress)
-                            eta_text.text(f'ETA: {eta:.2f} seconds')
+                            progress_bar.progress(output, text=f'Extracting data...(ETA: {eta:.2f} seconds)')
                         else:
                             # 최종 데이터 반환
                             zip_data = output
                             progress_bar.empty()
                             extract_button.empty()
-                            eta_text.empty()
                             st.success("🎉 Now, you can download data!")
                             st.download_button(label='⬇️ \r Download', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
 
