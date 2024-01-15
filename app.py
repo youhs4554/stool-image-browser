@@ -2,9 +2,14 @@ import streamlit as st
 import streamlit_authenticator as stauth
 from image_browser import main as image_browser
 
+st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
+
+def reset_session_state():
+    st.session_state.page_number = 1
+    st.session_state.button_clicked = False
+    st.session_state.apply_filter = False
 
 def login():
-    st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
     global authenticator
 
     placeholder_title = st.empty()
@@ -19,7 +24,11 @@ def login():
     )
 
     name, authentication_status, username = authenticator.login('Login', 'main')
-    
+
+    if st.session_state.get('logout', False):
+        st.session_state['logout'] = False
+        reset_session_state()
+
     if authentication_status:
         placeholder_title.empty()
 
