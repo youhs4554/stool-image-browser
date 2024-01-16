@@ -14,6 +14,8 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 import zipfile
 
+from utils import reset_session_state
+
 s3 = boto3.client('s3', region_name=st.secrets['AWS_DEFAULT_REGION'], 
                   aws_access_key_id=st.secrets['AWS_ACCESS_KEY_ID'], 
                   aws_secret_access_key=st.secrets['AWS_SECRET_ACCESS_KEY'])
@@ -157,7 +159,7 @@ def main(username):
         else:
             folder_list = get_folder_list(bucket)
 
-        prefix = st.selectbox("Prefix", folder_list)
+        prefix = st.selectbox("Prefix", folder_list, on_change=reset_session_state)
 
         # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
         us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']

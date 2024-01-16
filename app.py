@@ -1,13 +1,9 @@
 import streamlit as st
 import streamlit_authenticator as stauth
 from image_browser import main as image_browser
+from utils import reset_session_state
 
 st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
-
-def reset_session_state():
-    st.session_state.page_number = 1
-    st.session_state.button_clicked = False
-    st.session_state.apply_filter = False
 
 def login():
     global authenticator
