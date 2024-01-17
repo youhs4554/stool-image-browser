@@ -128,25 +128,26 @@ def statistics_page():
                 fig3 = px.histogram(df_new, x='DoB', nbins=100, title='DoB Histogram')
                 st.plotly_chart(fig3)
             if column_name == 'Upload Date' or column_name == 'All':
-                # 'UploadDate' 컬럼의 날짜 부분만 추출합니다.
-                df_new['Date'] = df_new['UploadDate'].dt.date
+                # 'UploadDate' 컬럼의 날짜와 시간 부분만 추출합니다.
+                df_new['DateTime'] = df_new['UploadDate'].dt.floor('H')
 
-                # 각 날짜에 발생한 이벤트 횟수를 계산합니다.
-                event_counts = df_new['Date'].value_counts().sort_index()
+                # 각 시간에 발생한 이벤트 횟수를 계산합니다.
+                event_counts = df_new['DateTime'].value_counts().sort_index()
 
                 # 전체 시간 범위를 생성합니다.
-                full_dates = pd.date_range(start=event_counts.index.min(), end=event_counts.index.max(), freq='D')
+                full_dates = pd.date_range(start=event_counts.index.min(), end=event_counts.index.max(), freq='H')
 
                 # 생성한 시간 범위를 데이터프레임으로 변환합니다.
-                df_dates = pd.DataFrame(full_dates.date, columns=['Date'])
+                df_dates = pd.DataFrame(full_dates, columns=['DateTime'])
 
                 # 이벤트가 발생한 횟수를 표시하는 새로운 컬럼을 생성합니다.
-                df_dates['Upload Count'] = df_dates['Date'].map(event_counts).fillna(0)
+                df_dates['Upload Count'] = df_dates['DateTime'].map(event_counts).fillna(0)
 
                 # Scatter plot을 그립니다.
-                fig4 = px.line(df_dates, x='Date', y='Upload Count', title='Upload Count Distribution', markers=True)
+                fig4 = px.line(df_dates, x='DateTime', y='Upload Count', title='Upload Count Distribution per Hour', markers=True)
 
                 st.plotly_chart(fig4)
+
 
 
 if __name__ == "__main__":
