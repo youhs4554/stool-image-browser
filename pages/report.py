@@ -80,15 +80,17 @@ def statistics_page():
         # 선택한 시간대를 적용합니다.
         tz = pytz.timezone(selected_timezone)
 
+        df.rename({'LastModified': 'UploadDate'}, axis=1, inplace=True)
+
         # 기존 코드를 선택한 시간대에 맞게 수정합니다.
-        df['LastModified'] = df['LastModified'].dt.tz_convert(tz)
-        df['LastModified'] = df['LastModified'].dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-        df = df.sort_values(by="LastModified", ascending=False)
+        df['UploadDate'] = df['UploadDate'].dt.tz_convert(tz)
+        df['UploadDate'] = df['UploadDate'].dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+        df = df.sort_values(by="UploadDate", ascending=False)
 
         start_date = tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0))
         end_date = tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
 
-        df_sel = df[(df['LastModified'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['LastModified'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
+        df_sel = df[(df['UploadDate'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['UploadDate'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
         if len(df_sel) == 0:
             st.error('No data to display.')
         else:
@@ -99,13 +101,13 @@ def statistics_page():
             df_new['SiteName'] = df_new['SiteName'].replace({'KNUH': '경북대병원'})
             df_new['DoB'] = df_new['DoB'].dt.strftime('%Y-%m-%d')
 
-            tz_str = df_new['LastModified'].iloc[0].split(' ')[-1]
-            df_new['LastModified'] = pd.to_datetime(df_new['LastModified'], format='%Y-%m-%d %H:%M:%S ' + tz_str)
+            tz_str = df_new['UploadDate'].iloc[0].split(' ')[-1]
+            df_new['UploadDate'] = pd.to_datetime(df_new['UploadDate'], format='%Y-%m-%d %H:%M:%S ' + tz_str)
 
             with st.expander("👋 Expand to see full data"):
                 st.header('Data')
                 st.download_button(label=':arrow_down: \r Download as .csv', data=convert_df(df_new), file_name='report.csv')
-                st.table(df_new[['SiteName', 'Gender', 'DoB', 'LastModified']].sort_values('LastModified', ascending=False))
+                st.table(df_new[['SiteName', 'Gender', 'DoB', 'UploadDate']].sort_values('UploadDate', ascending=False))
 
             st.subheader("Statistics")
             column_name = st.selectbox("Select column", ["All", "Gender", "SiteName", "DoB", "Upload Date"])
@@ -126,8 +128,8 @@ def statistics_page():
                 fig3 = px.histogram(df_new, x='DoB', nbins=100, title='DoB Histogram')
                 st.plotly_chart(fig3)
             if column_name == 'Upload Date' or column_name == 'All':
-                # 'LastModified' 컬럼의 날짜 부분만 추출합니다.
-                df_new['Date'] = df_new['LastModified'].dt.date
+                # 'UploadDate' 컬럼의 날짜 부분만 추출합니다.
+                df_new['Date'] = df_new['UploadDate'].dt.date
 
                 # 각 날짜에 발생한 이벤트 횟수를 계산합니다.
                 event_counts = df_new['Date'].value_counts().sort_index()
