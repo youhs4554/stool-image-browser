@@ -104,10 +104,13 @@ def statistics_page():
             tz_str = df_new['UploadDate'].iloc[0].split(' ')[-1]
             df_new['UploadDate'] = pd.to_datetime(df_new['UploadDate'], format='%Y-%m-%d %H:%M:%S ' + tz_str)
 
-            with st.expander("👋 Expand to see full data"):
-                st.header('Data')
-                st.download_button(label=':arrow_down: \r Download as .csv', data=convert_df(df_new), file_name='report.csv')
-                st.table(df_new[['SiteName', 'Gender', 'DoB', 'UploadDate']].sort_values('UploadDate', ascending=False))
+            st.subheader('Data Preview')
+            st.text('Only 10 rows are displayed and sorted by upload time')
+            show_all = st.checkbox('Show all rows', False)
+            n_rows = len(df_new) if show_all else 10
+            st.text('For more data...')
+            st.download_button(label=':arrow_down: \r Download as .csv', data=convert_df(df_new), file_name='report.csv')
+            st.table(df_new[['SiteName', 'Gender', 'DoB', 'UploadDate']].sort_values('UploadDate', ascending=False).head(n_rows))
 
             st.subheader("Statistics")
             column_name = st.selectbox("Select column", ["All", "Gender", "SiteName", "DoB", "Upload Date"])
@@ -144,7 +147,7 @@ def statistics_page():
                 df_dates['Upload Count'] = df_dates['DateTime'].map(event_counts).fillna(0)
 
                 # Scatter plot을 그립니다.
-                fig4 = px.line(df_dates, x='DateTime', y='Upload Count', title='Upload Count Distribution per Hour', markers=True)
+                fig4 = px.line(df_dates, x='DateTime', y='Upload Count', title='Upload Event Distribution per Hour', markers=True)
 
                 st.plotly_chart(fig4)
 
