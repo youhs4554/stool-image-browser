@@ -88,7 +88,7 @@ def is_image_file(file_name):
     else:
         return False
 
-def get_s3_metadata(bucket, prefix):
+def get_s3_metadata(bucket, prefix, fetch_preview=True):
     response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
 
     if response.get('Contents') is None:
@@ -99,7 +99,10 @@ def get_s3_metadata(bucket, prefix):
         name = obj['Key']
         last_modified = obj['LastModified']
         if is_image_file(name):
-            preview = get_s3_image_preview(bucket, name)
+            if fetch_preview:
+                preview = get_s3_image_preview(bucket, name)
+            else:
+                preview = None
             download_link = get_s3_download_link(bucket, name)
             basename = os.path.splitext(os.path.basename(name))[0]
             _, site_name, dob, gender, _, _, *lang  = basename.split('_')
@@ -109,7 +112,10 @@ def get_s3_metadata(bucket, prefix):
             else:
                 lang = "N/A"
 
-            data.append({'SiteName': site_name, 'Gender': gender, 'DoB' : datetime.strptime(dob, '%Y%m%d'), 'LastModified': last_modified, 'Language': lang, 'Preview': preview, 'Download': download_link})
+            row = {'SiteName': site_name, 'Gender': gender, 'DoB' : datetime.strptime(dob, '%Y%m%d'), 'LastModified': last_modified, 'Language': lang, 'Preview': preview, 'Download': download_link}
+            if not fetch_preview:
+                del row['Preview']
+            data.append(row)
 
     return pd.DataFrame(data)
 
@@ -147,19 +153,24 @@ def get_s3_download_link(bucket, key):
     return f'<a href="{download_link}" download="{outfile}">⬇</a>'
 
 
-def main(username):
+def main():
     bucket = st.secrets["AWS_S3_BUCKET_NAME"]
 
     with st.sidebar:
         st.title("🚽 Stool Image Browser")
         st.header("Storage")
 
-        if 'guest' in username:
+        if 'guest' in st.session_state.username:
             folder_list = ['Calprotectin_Fecal_Test']
         else:
             folder_list = get_folder_list(bucket)
 
-        prefix = st.selectbox("Prefix", folder_list, on_change=reset_session_state)
+        default_prefix = st.session_state.prefix if st.session_state.prefix is not None else folder_list[0]
+        prefix = st.selectbox("Prefix", folder_list, on_change=reset_session_state, index=folder_list.index(default_prefix))
+
+        if st.session_state.prefix != prefix:
+            st.session_state.prefix = prefix
+            st.rerun()
 
         # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
         us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']
@@ -257,7 +268,7 @@ def main(username):
                 csv_data = convert_df(df_to_download)
 
                 extract_button = st.empty()
-                if extract_button.button("↗️ \r Extract"):
+                if extract_button.button(":arrow_upper_right: \r Extract"):
                     start_time = time.time()
                     progress_bar = st.progress(0, text='Extracting data...')
                     zip_generator = zip_files_parallel(download_links, csv_data)
@@ -276,7 +287,7 @@ def main(username):
                             progress_bar.empty()
                             extract_button.empty()
                             st.success("🎉 Now, you can download data!")
-                            st.download_button(label='⬇️ \r Download', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
+                            st.download_button(label=':arrow_down: \r Download', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
 
 
             supcol1, _, supcol2 = st.columns([1, 8, 1])
@@ -285,11 +296,11 @@ def main(username):
                 st.subheader(f"Page ({st.session_state.page_number}/{n_pages})")
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button('⬅️') and st.session_state.page_number > 1:
+                    if st.button(':arrow_left:') and st.session_state.page_number > 1:
                         st.session_state.page_number -= 1
                         st.session_state.button_clicked = True
                 with col2:
-                    if st.button('➡️') and st.session_state.page_number < n_pages:
+                    if st.button(':arrow_right:') and st.session_state.page_number < n_pages:
                         st.session_state.page_number += 1
                         st.session_state.button_clicked = True
             

@@ -2,3 +2,4 @@ streamlit
 streamlit-authenticator
 boto3
 openpyxl
+plotly

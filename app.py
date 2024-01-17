@@ -3,11 +3,8 @@ import streamlit_authenticator as stauth
 from image_browser import main as image_browser
 from utils import reset_session_state
 
-st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
 
 def login():
-    global authenticator
-
     placeholder_title = st.empty()
     placeholder_title.title("🚽 Stool Image Browser")
 
@@ -28,20 +25,24 @@ def login():
     if authentication_status:
         placeholder_title.empty()
 
-    return name, authentication_status, username
+    return name, authentication_status, username, authenticator
 
-if __name__ == "__main__":
+def app():
+    st.set_page_config(page_title="Stool Image Browser", page_icon="🚽", layout='wide')
+
     if 'page_number' not in st.session_state:
         st.session_state.page_number = 1
     if 'button_clicked' not in st.session_state:
         st.session_state.button_clicked = False
     if 'apply_filter' not in st.session_state:
         st.session_state.apply_filter = False
+    if 'prefix' not in st.session_state:
+        st.session_state.prefix = None
 
-    name, authentication_status, username = login()
+    name, authentication_status, username, authenticator = login()
 
     if authentication_status:
-        image_browser(username=username)
+        image_browser()
         with st.sidebar:
             st.header("Logout?")
             authenticator.logout('Logout', 'main', key='unique_key')
@@ -49,3 +50,6 @@ if __name__ == "__main__":
         st.error('Username/password is incorrect')
     elif authentication_status == None:
         st.warning("Only authorized users can access this database.")
+
+if __name__ == "__main__":
+    app()
