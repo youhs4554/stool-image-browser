@@ -1,7 +1,7 @@
 import numpy as np
 import streamlit as st
 from app import login
-from image_browser import get_folder_list, get_s3_metadata
+from image_browser import convert_df, get_folder_list, get_s3_metadata
 from utils import reset_session_state
 from datetime import datetime
 import pytz
@@ -64,6 +64,7 @@ def statistics_page():
         # Streamlit의 selectbox를 사용하여 사용자에게 시간대를 선택하도록 요청합니다.
         selected_timezone = st.selectbox('Please select your timezone', timezones)
 
+        st.header("Duration")
         col1, col2 = st.columns(2)
         with col1:
             start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today')-pd.Timedelta(days=1))).date()
@@ -71,7 +72,7 @@ def statistics_page():
             end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
         
     st.markdown('<div class="instruction">Full data is available at <a href="/" target=_top>here</a></div>', unsafe_allow_html=True)
-    st.header(f"Report ({start_date.strftime('%Y/%m/%d')} - {end_date.strftime('%Y/%m/%d')})")
+    st.title(f"Report ({start_date.strftime('%Y/%m/%d')} - {end_date.strftime('%Y/%m/%d')})")
     st.text(f"Name : {st.session_state.prefix.strip('/')}")
     with st.spinner('Loading Data...'):
         df = get_s3_metadata(bucket, prefix, fetch_preview=False)
@@ -92,19 +93,21 @@ def statistics_page():
             st.error('No data to display.')
         else:
             # Normalize data
-            df_new = df_sel.copy()
+            df_sel.index = pd.Series(range(1, len(df_sel)+1))
+            df_new = df_sel.copy().drop(['Download', 'Language'], axis=1).reset_index()
             df_new['Gender'] = df_new['Gender'].replace({'남자': 'Male', '여자': 'Female'})
             df_new['SiteName'] = df_new['SiteName'].replace({'KNUH': '경북대병원'})
             df_new['DoB'] = df_new['DoB'].dt.strftime('%Y-%m-%d')
 
             tz_str = df_new['LastModified'].iloc[0].split(' ')[-1]
             df_new['LastModified'] = pd.to_datetime(df_new['LastModified'], format='%Y-%m-%d %H:%M:%S ' + tz_str)
-            df_new.reset_index(inplace=True)
 
             with st.expander("👋 Expand to see full data"):
-                st.table(df_new[['SiteName', 'Gender', 'DoB', 'LastModified']])
+                st.header('Data')
+                st.download_button(label=':arrow_down: \r Download as .csv', data=convert_df(df_new), file_name='report.csv')
+                st.table(df_new[['SiteName', 'Gender', 'DoB', 'LastModified']].sort_values('LastModified', ascending=False))
 
-            st.header("Statistics")
+            st.subheader("Statistics")
             column_name = st.selectbox("Select column", ["All", "Gender", "SiteName", "DoB", "Upload Date"])
             def replace_numeric_with_etc(value):
                 # 만약 값이 숫자라면 'etc'를 반환하고, 그렇지 않으면 원래의 값을 반환합니다.
