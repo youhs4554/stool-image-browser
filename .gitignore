@@ -1,2 +1,6 @@
 */secrets.toml
 __pycache__/*
+.env
+generate_password.py
+stool-report-bot.py
+.vscode/*

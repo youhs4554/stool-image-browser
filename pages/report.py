@@ -10,7 +10,7 @@ import plotly.express as px
 
 def set_streamlit_page_config_once():
     try:
-        st.set_page_config(page_title="📊 Stool Data Statistics", page_icon="📊", layout='wide')
+        st.set_page_config(page_title="Stool Data Statistics", page_icon="📊", layout='wide')
     except st.errors.StreamlitAPIException as e:
         if "can only be called once per app" in e.__str__():
             # ignore this error
@@ -27,18 +27,18 @@ if 'prefix' not in st.session_state:
 def statistics_page():    
     st.markdown("""
                 <style>
-                    .main {
-                        font-size: 1.5em;
+                    .appview-container .main .block-container {
                         padding-top: 0rem;
                         width: 100%;
+                        max-height: 80vh;
                     }
                     .instruction {
                         background-color: rgba(152, 251, 152, 0.5); 
                         font-size: 1.5rem;
                         padding: 0.5rem;
                     }
-                </style>
-                """, unsafe_allow_html=True)
+                    </style>
+                    """, unsafe_allow_html=True)
     
     bucket = st.secrets["AWS_S3_BUCKET_NAME"]
     with st.sidebar:
@@ -70,8 +70,8 @@ def statistics_page():
             start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today')-pd.Timedelta(days=1))).date()
         with col2:
             end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
-        
-    st.markdown('<div class="instruction">Full data is available at <a href="/" target=_top>here</a></div>', unsafe_allow_html=True)
+    
+    st.markdown(f'<div class="instruction">Full data is available <a href="/" onclick="window.history.back(); return false;">here</a></div>', unsafe_allow_html=True)
     st.title(f"Report ({start_date.strftime('%Y/%m/%d')} - {end_date.strftime('%Y/%m/%d')})")
     st.text(f"Name : {st.session_state.prefix.strip('/')}")
     with st.spinner('Loading Data...'):
@@ -101,11 +101,15 @@ def statistics_page():
             df_new['SiteName'] = df_new['SiteName'].replace({'KNUH': '경북대병원'})
             df_new['DoB'] = df_new['DoB'].dt.strftime('%Y-%m-%d')
 
+            # 성별과 생년월일로 환자를 특정 가능하다고 가정 -> 중복되는 행 제외 (환자 카운팅 목적)
+            df_new_unique = df_new.drop_duplicates(['Gender', 'DoB'])
+
             tz_str = df_new['UploadDate'].iloc[0].split(' ')[-1]
             df_new['UploadDate'] = pd.to_datetime(df_new['UploadDate'], format='%Y-%m-%d %H:%M:%S ' + tz_str)
 
             st.subheader('Data Preview')
-            st.text('Only 10 rows are displayed and sorted by upload time')
+            st.text(f"N_samples = {len(df_new)}, N_patients = {len(df_new_unique)}")
+            st.text('(Only 10 rows are displayed and sorted by upload time)')
             show_all = st.checkbox('Show all rows', False)
             n_rows = len(df_new) if show_all else 10
             st.text('For more data...')
@@ -120,15 +124,15 @@ def statistics_page():
             
             df_new['SiteName'] = df_new['SiteName'].apply(replace_numeric_with_etc)
             if column_name == 'Gender' or column_name == 'All':
-                gender_counts = df_new['Gender'].value_counts()  # 각 성별의 수를 계산합니다.
-                fig1 = px.pie(df_new, names=gender_counts.index, values=gender_counts.values, title='Pie Chart of Gender')
+                gender_counts = df_new_unique['Gender'].value_counts()  # 각 성별의 수를 계산합니다.
+                fig1 = px.pie(df_new_unique, names=gender_counts.index, values=gender_counts.values, title='Pie Chart of Gender')
                 st.plotly_chart(fig1)
             if column_name == 'SiteName' or column_name == 'All':
-                site_counts = df_new['Gender'].value_counts()  # 각 병원의 수를 계산합니다.
-                fig2 = px.pie(df_new, names=site_counts.index, values=site_counts.values, title='Pie Chart of SiteName') # plotly pie차트
+                site_counts = df_new_unique['SiteName'].value_counts()  # 각 병원의 수를 계산합니다.
+                fig2 = px.pie(df_new_unique, names=site_counts.index, values=site_counts.values, title='Pie Chart of SiteName') # plotly pie차트
                 st.plotly_chart(fig2)
             if column_name == 'DoB' or column_name == 'All':
-                fig3 = px.histogram(df_new, x='DoB', nbins=100, title='DoB Histogram')
+                fig3 = px.histogram(df_new_unique, x='DoB', nbins=100, title='DoB Histogram')
                 st.plotly_chart(fig3)
             if column_name == 'Upload Date' or column_name == 'All':
                 # 'UploadDate' 컬럼의 날짜와 시간 부분만 추출합니다.
