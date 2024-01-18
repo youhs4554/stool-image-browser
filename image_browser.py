@@ -145,17 +145,17 @@ def main():
                             st.download_button(label=':arrow_down: \r Download', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
 
 
-            supcol1, _, supcol2 = st.columns([1, 8, 1])
+            supcol1, _, supcol2 = st.columns([1, 5, 1])
 
             with supcol1:
                 st.subheader(f"Page ({st.session_state.page_number}/{n_pages})")
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button(':arrow_left:') and st.session_state.page_number > 1:
+                    if st.button(':arrow_left: \r Prev') and st.session_state.page_number > 1:
                         st.session_state.page_number -= 1
                         st.session_state.button_clicked = True
                 with col2:
-                    if st.button(':arrow_right:') and st.session_state.page_number < n_pages:
+                    if st.button('Next \r :arrow_right:') and st.session_state.page_number < n_pages:
                         st.session_state.page_number += 1
                         st.session_state.button_clicked = True
             
