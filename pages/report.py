@@ -67,7 +67,7 @@ def statistics_page():
         st.header("Duration")
         col1, col2 = st.columns(2)
         with col1:
-            start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today')-pd.Timedelta(days=1))).date()
+            start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today')-pd.Timedelta(days=7))).date()
         with col2:
             end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
     
