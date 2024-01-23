@@ -97,7 +97,7 @@ def statistics_page():
             # Normalize data
             df_sel.index = pd.Series(range(1, len(df_sel)+1))
             df_new = df_sel.copy().drop(['Download', 'Language'], axis=1).reset_index()
-            df_new['Gender'] = df_new['Gender'].replace({'남자': 'Male', '여자': 'Female'})
+            df_new['Gender'] = df_new['Gender'].replace({'Male': '남자', 'Female': '여자'})
             df_new['SiteName'] = df_new['SiteName'].replace({'KNUH': '경북대병원'})
             df_new['DoB'] = df_new['DoB'].dt.strftime('%Y-%m-%d')
 
