@@ -65,7 +65,7 @@ def get_folder_list(bucket):
 @st.cache_data(ttl=3*3600)
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
-    return df.to_csv(index=False)
+    return df.to_csv(index=False, encoding='utf-8').encode("cp949")
 
 @st.cache_data(ttl=3*3600)
 def get_s3_presigned_url(bucket, key, expiration=3600):
