@@ -22,6 +22,7 @@ def main():
 
         default_prefix = st.session_state.prefix if st.session_state.prefix is not None else folder_list[0]
         prefix = st.selectbox("Prefix", folder_list, on_change=reset_session_state, index=folder_list.index(default_prefix))
+        st.session_state.prefix = prefix
 
         # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
         us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']
@@ -138,8 +139,7 @@ def main():
                             progress_bar.empty()
                             extract_button.empty()
                             st.success("🎉 Now, you can download data!")
-                            st.download_button(label=':arrow_down: \r Download', data=zip_data, file_name='downloaded_files.zip', mime='application/zip')
-
+                            st.download_button(label=':arrow_down: \r Download', data=zip_data, file_name=f"{prefix}_data_{datetime.now().astimezone(tz).strftime('%Y%m%d_%H%M%S')}.zip", mime='application/zip')
 
             supcol1, _, supcol2 = st.columns([1, 5, 1])
 

@@ -52,9 +52,6 @@ def statistics_page():
 
         default_prefix = st.session_state.prefix if st.session_state.prefix is not None else folder_list[0]
         prefix = st.selectbox("Prefix", folder_list, on_change=reset_session_state, index=folder_list.index(default_prefix))
-        if st.session_state.prefix != prefix:
-            st.session_state.prefix = prefix
-            st.rerun()
 
         # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
         us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']
@@ -70,7 +67,11 @@ def statistics_page():
             start_date = pd.to_datetime(st.date_input('Start date', value=pd.to_datetime('today')-pd.Timedelta(days=7))).date()
         with col2:
             end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
-    
+
+    if st.session_state.prefix != prefix:
+        st.session_state.prefix = prefix
+        st.rerun()
+
     st.markdown(f'<div class="instruction">Full data is available <a href="/" onclick="window.history.back(); return false;">here</a></div>', unsafe_allow_html=True)
     st.title(f"Report ({start_date.strftime('%Y/%m/%d')} - {end_date.strftime('%Y/%m/%d')})")
     st.text(f"Name : {st.session_state.prefix.strip('/')}")
