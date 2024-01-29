@@ -52,9 +52,6 @@ def statistics_page():
 
         default_prefix = st.session_state.prefix if st.session_state.prefix is not None else folder_list[0]
         prefix = st.selectbox("Prefix", folder_list, on_change=reset_session_state, index=folder_list.index(default_prefix))
-        if st.session_state.prefix != prefix:
-            st.session_state.prefix = prefix
-            st.rerun()
 
         # 사용자에게 선택할 수 있는 시간대 리스트를 제공합니다.
         us_timezones = ['America/New_York', 'America/Denver', 'America/Chicago', 'America/Los_Angeles']
