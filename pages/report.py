@@ -82,13 +82,13 @@ def statistics_page():
 
         df.rename({'LastModified': 'UploadDate'}, axis=1, inplace=True)
 
-        # 기존 코드를 선택한 시간대에 맞게 수정합니다.
+        # 시간대에 맞게 수정합니다.
         df['UploadDate'] = df['UploadDate'].dt.tz_convert(tz)
         df['UploadDate'] = df['UploadDate'].dt.strftime('%Y-%m-%d %H:%M:%S %Z')
         df = df.sort_values(by="UploadDate", ascending=False)
 
-        start_date = tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0))
-        end_date = tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
+        start_date = tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0)).astimezone(tz)
+        end_date = tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59)).astimezone(tz)
 
         df_sel = df[(df['UploadDate'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['UploadDate'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
         if len(df_sel) == 0:

@@ -42,7 +42,7 @@ def main():
 
         # 기존 코드를 선택한 시간대에 맞게 수정합니다.
         earliest_date = pd.to_datetime(df['LastModified']).min()
-        earliest_date = tz.localize(datetime(earliest_date.year, earliest_date.month, earliest_date.day, 0, 0, 0))
+        earliest_date = tz.localize(datetime(earliest_date.year, earliest_date.month, earliest_date.day, 0, 0, 0)).astimezone(tz)
         df['LastModified'] = df['LastModified'].dt.tz_convert(tz)
         df['LastModified'] = df['LastModified'].dt.strftime('%Y-%m-%d %H:%M:%S %Z')
 
@@ -65,12 +65,12 @@ def main():
             st.header("Filter")
             col1, col2 = st.columns(2)
             with col1:
-                start_date = pd.to_datetime(st.date_input('Start date', value=earliest_date)).date()
+                start_date = tz.localize(pd.to_datetime(st.date_input('Start date', value=earliest_date))).astimezone(tz).date()
             with col2:
-                end_date = pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today'))).date()
+                end_date = tz.localize(pd.to_datetime(st.date_input('End date', value=pd.to_datetime('today')))).astimezone(tz).date()
 
-            start_date = tz.localize(datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0))
-            end_date = tz.localize(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
+            start_date = datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0)
+            end_date = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59)
 
             df_sel = df[(df['LastModified'] >= start_date.strftime('%Y-%m-%d %H:%M:%S %Z')) & (df['LastModified'] <= end_date.strftime('%Y-%m-%d %H:%M:%S %Z'))]
 
