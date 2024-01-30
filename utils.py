@@ -45,7 +45,7 @@ def zip_files_parallel(download_links, csv_data):
 
     with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
         with ThreadPoolExecutor() as executor:
-            for i, link in enumerate(download_links):
+            for i, link in enumerate(download_links, start=1):
                 progress = executor.submit(download_and_compress, i, link, zip_file, total_files)
                 yield progress.result()
 
