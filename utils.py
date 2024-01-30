@@ -35,7 +35,7 @@ def download_and_compress(i, link, zip_file, total_files):
     data = download_data(link)
     ext = get_image_ext(link)
     zip_file.writestr(os.path.join('images', f'image_{i:04d}' + ext), data)
-    progress = (i+1) / total_files
+    progress = i / total_files
     return progress
 
 # zip 파일로 압축 (병렬 처리 : on)
